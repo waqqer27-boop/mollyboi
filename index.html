@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mollyboi</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<style>
+body{font-family:Arial,sans-serif;background:#000;color:#fff;margin:0;padding:20px;padding-bottom:80px}
+h1{text-align:center;font-size:28px;letter-spacing:3px;margin-bottom:20px}
+.stats{text-align:center;margin-bottom:20px;color:#aaa;font-size:14px}
+
+/* Bottom Mobile Nav */
+.bottom-nav{
+position:fixed;
+bottom:0;
+left:0;
+width:100%;
+background:#111;
+border-top:1px solid #333;
+display:flex;
+justify-content:space-around;
+padding:10px 0;
+z-index:1000;
+}
+.bottom-nav button{
+background:none;
+border:none;
+color:#888;
+font-size:18px;
+transition:.3s;
+}
+.bottom-nav button.active{
+color:#fff;
+transform:scale(1.2);
+}
+
+.container{display:flex;gap:20px;justify-content:space-between;flex-wrap:wrap}
+.column{background:#111;padding:15px;border-radius:10px;width:23%;border:1px solid #333;display:flex;flex-direction:column;margin-bottom:20px}
+.column h2{text-align:center;font-weight:normal;border-bottom:1px solid #333;padding-bottom:10px;font-size:16px}
+
+input,button{padding:8px;margin-top:5px;border-radius:6px;border:1px solid #444;background:#000;color:#fff}
+button{cursor:pointer;transition:.3s}
+button:hover{background:#fff;color:#000}
+
+ul{list-style:none;padding:0;margin-top:10px;flex-grow:1}
+li{background:#000;border:1px solid #333;padding:8px;margin-bottom:10px;border-radius:8px;display:flex;align-items:center;gap:8px;opacity:1;transition:all .3s}
+li.removing{opacity:0;transform:scale(.8)}
+.movie-content{display:flex;align-items:center;gap:10px;flex-grow:1}
+.poster{width:40px;height:60px;object-fit:cover;border-radius:5px;display:none;cursor:pointer}
+.add-poster{width:25px;height:25px;font-size:16px;padding:0}
+.delete,.favorite{font-size:14px;padding:4px 8px}
+.delete{margin-left:auto}
+.favorite.active{color:red;border-color:red}
+
+#modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);justify-content:center;align-items:center}
+#modal img{max-width:85%;max-height:85%;border-radius:10px}
+
+@media(max-width:900px){.column{width:48%}}
+@media(max-width:600px){.container{flex-direction:column}.column{width:100%}.poster{width:60px;height:90px}}
+</style>
+</head>
+<body>
+
+<h1>mollyboi</h1>
+<div class="stats">
+<span id="totalCount">Всего фильмов: 0</span> | 
+<span id="watchedCount">Посмотрено: 0</span> | 
+<span id="favCount">Избранное: 0</span>
+</div>
+
+<div class="container">
+
+<div class="column" id="watchColumn" ondragover="allowDrop(event)" ondrop="dropMovie(event,'watch')">
+<h2>Хочу посмотреть</h2>
+<input type="text" id="watchInput" placeholder="Название фильма">
+<button onclick="addMovie('watch')">Добавить</button>
+<ul id="watchList"></ul>
+</div>
+
+<div class="column" id="watchedColumn" ondragover="allowDrop(event)" ondrop="dropMovie(event,'watched')">
+<h2>Уже посмотрел</h2>
+<input type="text" id="watchedInput" placeholder="Название фильма">
+<button onclick="addMovie('watched')">Добавить</button>
+<ul id="watchedList"></ul>
+</div>
+
+<div class="column" id="releaseColumn" ondragover="allowDrop(event)" ondrop="dropMovie(event,'release')">
+<h2>Жду выхода</h2>
+<input type="text" id="releaseInput" placeholder="Название фильма">
+<button onclick="addMovie('release')">Добавить</button>
+<ul id="releaseList"></ul>
+</div>
+
+<div class="column" id="favoriteColumn">
+<h2>Избранное</h2>
+<ul id="favoriteList"></ul>
+</div>
+
+</div>
+
+<div class="bottom-nav">
+<button onclick="navigate('watchColumn',this)">🎬</button>
+<button onclick="navigate('watchedColumn',this)">✔</button>
+<button onclick="navigate('releaseColumn',this)">⏳</button>
+<button onclick="navigate('favoriteColumn',this)">♥</button>
+</div>
+
+<div id="modal" onclick="this.style.display='none'"><img id="modalImg"></div>
+
+<script>
+if('serviceWorker'in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js')})}
+
+function navigate(id,btn){
+document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.remove('active'))
+btn.classList.add('active')
+document.getElementById(id).scrollIntoView({behavior:'smooth'})
+}
+
+const storageKey='mollyboi_movies'
+function save(data){localStorage.setItem(storageKey,JSON.stringify(data));updateStats()}
+function load(){return JSON.parse(localStorage.getItem(storageKey))||{watch:[],watched:[],release:[]}}
+
+function createMovie(type,movie){
+const li=document.createElement('li');li.draggable=true
+li.ondragstart=e=>e.dataTransfer.setData('text/plain',JSON.stringify({type:type,id:movie.id}))
+
+const addBtn=document.createElement('button');addBtn.textContent='+';addBtn.classList.add('add-poster')
+const file=document.createElement('input');file.type='file';file.accept='image/*';file.style.display='none'
+
+const img=document.createElement('img');img.classList.add('poster')
+if(movie.poster){img.src=movie.poster;img.style.display='block'}
+img.onclick=()=>{document.getElementById('modalImg').src=img.src;document.getElementById('modal').style.display='flex'}
+
+addBtn.onclick=()=>file.click()
+file.onchange=function(){const f=this.files[0];if(f){const r=new FileReader();r.onload=e=>{img.src=e.target.result;img.style.display='block';updatePoster(type,movie.id,e.target.result)};r.readAsDataURL(f)}}
+
+const content=document.createElement('div');content.classList.add('movie-content')
+content.appendChild(img);content.appendChild(document.createTextNode(movie.title))
+
+const fav=document.createElement('button');fav.textContent='♥';fav.classList.add('favorite')
+if(movie.favorite)fav.classList.add('active')
+fav.onclick=()=>toggleFavorite(type,movie.id)
+
+const del=document.createElement('button');del.textContent='X';del.classList.add('delete')
+del.onclick=()=>{li.classList.add('removing');setTimeout(()=>deleteMovie(type,movie.id),300)}
+
+li.appendChild(addBtn);li.appendChild(file);li.appendChild(content);li.appendChild(fav);li.appendChild(del)
+return li}
+
+function addMovie(type){const input=document.getElementById(type+'Input');if(!input.value.trim())return
+const data=load();const movie={id:Date.now(),title:input.value,poster:null,favorite:false}
+data[type].push(movie);save(data);render();input.value=''}
+
+function deleteMovie(type,id){const data=load();data[type]=data[type].filter(m=>m.id!==id);save(data);render()}
+function deleteFromFavorites(id){const data=load();['watch','watched','release'].forEach(type=>{
+data[type]=data[type].filter(m=>m.id!==id)
+});save(data);render()}
+
+function updatePoster(type,id,poster){const data=load();const m=data[type].find(x=>x.id===id);if(m){m.poster=poster;save(data)}}
+function toggleFavorite(type,id){const data=load();const m=data[type].find(x=>x.id===id);if(m){m.favorite=!m.favorite;save(data);render()}}
+
+function render(){const data=load();['watch','watched','release'].forEach(type=>{
+const list=document.getElementById(type+'List');list.innerHTML=''
+data[type].forEach(movie=>list.appendChild(createMovie(type,movie)))})
+
+const favList=document.getElementById('favoriteList');favList.innerHTML=''
+Object.values(data).flat().filter(m=>m.favorite).forEach(movie=>{
+const li=document.createElement('li')
+const content=document.createElement('div');content.classList.add('movie-content')
+const img=document.createElement('img');img.classList.add('poster')
+if(movie.poster){img.src=movie.poster;img.style.display='block'}
+img.onclick=()=>{document.getElementById('modalImg').src=img.src;document.getElementById('modal').style.display='flex'}
+const title=document.createElement('span');title.textContent=movie.title
+content.appendChild(img);content.appendChild(title)
+const del=document.createElement('button');del.textContent='X';del.classList.add('delete')
+del.onclick=()=>{li.classList.add('removing');setTimeout(()=>deleteFromFavorites(movie.id),300)}
+li.appendChild(content);li.appendChild(del)
+favList.appendChild(li)
+})}
+
+function allowDrop(e){e.preventDefault()}
+function dropMovie(e,newType){e.preventDefault();const data=JSON.parse(e.dataTransfer.getData('text/plain'))
+if(data.type===newType)return
+const movies=load();const movie=movies[data.type].find(m=>m.id===data.id)
+movies[data.type]=movies[data.type].filter(m=>m.id!==data.id)
+movies[newType].push(movie);save(movies);render()}
+
+function updateStats(){const data=load();const total=data.watch.length+data.watched.length+data.release.length
+const favTotal=Object.values(data).flat().filter(m=>m.favorite).length
+document.getElementById('totalCount').textContent='Всего фильмов: '+total
+ document.getElementById('watchedCount').textContent='Посмотрено: '+data.watched.length
+ document.getElementById('favCount').textContent='Избранное: '+favTotal}
+
+render();updateStats()
+</script>
+
+</body>
+</html>
